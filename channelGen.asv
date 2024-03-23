@@ -1,9 +1,0 @@
-function Beta = coefGen(range,velocity)
-    global c0 lambda M N delta_f
-    L=length(range);
-    Beta=zeros(M,N,L);
-    delay = 2 * range / c0; %各目标的往返时延。
-    h_gain = exp(1j*2*pi*rand(size(delay)));    %各目标随机的信道相位响应
-    doppler = 2*velocity/lambda;    %各目标的多普勒频移，这里的速度是在LoS方向的分量
-    d=
-end
