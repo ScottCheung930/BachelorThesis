@@ -1,9 +1,9 @@
-%% MUSIC for OFDM sensing
+%% MUSIC_OFDMsensing
 % CIM: Input channel information matrix(pre-processed by known transmitted symbols)
 % k:target number
 % Author: Yunbo HU(SIMIT, UCAS)
 % GitHub: https://github.com/edenhu1111
-function [P_music_theta] = MUSICforOFDMsensing(R)
+function [P_music_theta, L] = MUSIC_OFDMsensing(R)
 global  NR
 %% DoA estimation
 [V,D]=eig(R);
