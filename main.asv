@@ -14,7 +14,7 @@ NT = 10; %发射天线数
 [Pattern, Delta_theta]=plotPattern();
 %Delta_theta为NT个振子，半波长间隔ULA天线的-10dB主瓣宽度
 %Pattern为归一化阵列因子
-SNR = 10; %信噪比(dB)=平均符号功率/单边白噪声功率N0
+SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0
 Ndir = ceil(120/Delta_theta); %为了扫描[-60,60]的范围需要扫描Ndir个方向
 K = 1120;      % 每帧的OFDM符号数
 Ns = 112;     % 在信号波束内进行一次DoA估计所需的OFDM符号数    
@@ -57,29 +57,25 @@ Rx_sensing=zeros(M,Ns,NR);% Rx_sensing(m,n,:)表示第n个OFDM符号中的第m�
 RxData_sensing=zeros(M,Ns); %接收符号，本仿真不考虑CSI，因而对于接收分集，选择功率最大的信道
 P_symbol=0; %平均每符号功率
 
-angle_dir=-60;%波束朝向角度初始为-60，每次扫描Delta_theta角度范围，直至完成[-60,60]的扫描
-Ar=steeringGen(theta-deg2rad(angle_dir),NR);%初始steering matrix
-At=steeringGen(theta-deg2rad(angle_dir),NT);
-Z=zeros(1,5);
-
+angle_dir=-pi/3;%波束朝向角度初始为-60，每次扫描Delta_theta角度范围，直至完成[-60,60]的扫描
+Ar=steeringGen(theta-repmat(angle_dir,1,L),NR);%初始steering matrix
+At=steeringGen(theta-repmat(angle_dir,1,L),NT);
+Beta=coefGen(r,v,Pattern,theta-repmat(angle_dir,1,L)); % 初始时阵列的幅度响应，多普勒，时延
 %依次接收N个OFDM符号
 for ii = 1:N 
    P_symbol_ii=0;
-   
+
    %依次计算M个子载波的接收信号
    for jj=1:M
-       Beta=coefGen(ii,jj,r,v,theta-deg2rad(angle_dir)); % 阵列的幅度响应，多普勒，时延
-       
        Tx=repmat(TxData(jj,ii),[NT,1]);
-       Rx=Ar*diag(reshape(Beta,1,L))*...
+       Rx=Ar*diag(reshape(Beta(ii,jj,1:L),1,L))*...
                       At.'*Tx; 
-       Rx_sensing(jj,mod(ii,Ns)+1,1:NR)=Rx;
+       Rx_sensing(jj,ii,1:NR)=Rx;
        P_symbol_ii=P_symbol_ii+1/NR*norm(Rx);
    end
    P_symbol_ii=P_symbol_ii/M;
    P_symbol=P_symbol+P_symbol_ii;
    
-
    %% Process a direction
    if(mod(ii,Ns)==0)%当接收到Ns个OFDM符号时，进行一次DoA估计
        angle_start=angle_dir-0.5*Delta_theta;%搜索区间
@@ -89,13 +85,13 @@ for ii = 1:N
        N0=P_symbol*10^(-SNR/10);%N0：单边噪声功率
        % Add Noise  (此处设信自干扰比SSIR为0)
        Rx_sensing=Rx_sensing+sqrt(N0)...
-                         .*(randn(M,Ns,NR)+1j*randn(M,Ns,NR))/sqrt(2);
+                         .*(randn(M,N,NR)+1j*randn(M,N,NR))/sqrt(2);
                      
        % Received Symbol Decision
-       for iii=1:Ns
+       for iii=1:N
          for jjj=1:M
-             %[~,k]=max(conj(Rx_sensing(jjj,iii,1:NR)).*Rx_sensing(jjj,iii,1:NR));
-              RxData_sensing(jjj,iii)=sum(Rx_sensing(jjj,iii,1:NR));
+             [~,k]=max(conj(Rx_sensing(jjj,iii,1:NR)).*Rx_sensing(jjj,iii,1:NR));
+              RxData_sensing(jjj,iii)=Rx(k);
          end
        end
       
@@ -103,11 +99,11 @@ for ii = 1:N
         R=zeros(NR,NR);
         for jjj=1:M
             R0=zeros(NR,NR);
-            for iii=1:Ns
-               y=reshape(Rx_sensing(jjj,iii,1:NR),NR,1);
+            for iii=1:N
+               y=reshape(Rx(jjj,iii,1:NR),NR,1);
                R0=R0+y*y';
             end
-            R=R+R0./Ns;
+            R=R+R0./N;
         end
         R=R./M;
         
@@ -118,11 +114,12 @@ for ii = 1:N
         index=find(Peaks==1);
         PeaksValue=P_music_theta(index);
         [~,indexx]=maxk(PeaksValue,L_estimate);
-        str=["in["+num2str(angle_start)+"°,"+num2str(angle_end)+"°], \n"];
-        fprintf(str);
+        str=["In ["+num2str(angle_start)+"°,"+num2str(angle_end)+"°], \n"];
+        disp(str);
         fprintf('%d target(s) detected\n', L_estimate);
         fprintf('Estimated DoA =');
         disp(theta_estimate(index(indexx)));
+        fprintf('\n')
         
         %保存当前方向doa估计结果
         doa_result=vertcat(theta_estimate(index(indexx)),PeaksValue(indexx));
@@ -136,8 +133,8 @@ for ii = 1:N
         %surf(double(PeaksMap));
         [maxTau,maxDoppler]=find(PeaksMap==1);
         peaks=zeros(1,length(maxDoppler));
-        for iii=1:length(maxTau)
-            peaks(iii)=matrix(maxTau(iii),maxDoppler(iii));
+        for ii=1:length(maxTau)
+            peaks(ii)=matrix(maxTau(ii),maxDoppler(ii));
         end
         %先按功率升序排列
         [peaks_sort,index] = sort(peaks);
@@ -155,7 +152,7 @@ for ii = 1:N
         for jj=1:peaks_num
             fprintf("%f\t",velocity(maxDoppler(index(jj))) );
         end
-        fprintf("\n");
+        fprintf(\n);
         
         %保存当前方向r-v估计结果
         r_v_result=vertcat(range(maxTau(index(1:peaks_num))),velocity(maxDoppler(index(1:peaks_num))),peaks_found);
@@ -166,8 +163,7 @@ for ii = 1:N
         if (ii==Ns)
             Z=result;
         else
-            Z1=[Z; result];
-            Z=Z1;
+            Z=vertcat(Z,result);
         end
         
 %         fprintf("Estimated [range,velocity]=\n");
@@ -180,17 +176,14 @@ for ii = 1:N
         
         %下一个扫描方向的信道参数
         angle_dir=angle_dir+Delta_theta;
-        if(angle_dir>60)
-            break;
-        end
-        Ar=steeringGen(theta-deg2rad(angle_dir),NR);%更新steering matrix
-        At=steeringGen(theta-deg2rad(angle_dir),NT);
+        Ar=steeringGen(theta-repmat(angle_dir,1,L),NR);%初始steering matrix
+        At=steeringGen(theta-repmat(angle_dir,1,L),NT);
+        Beta=coefGen(r,v,Pattern,theta-repmat(angle_dir,1,L)); % 初始时阵列的幅度响应，多普勒，时延
    end
 end
 
 figure(2);
-polarplot(deg2rad(Z(:,4)),Z(:,1),'*');
-thetalim([-60,60]);
+polarplot(Z(:,4),Z())
 
 % Rx=zeros(M,N,NR);% Rx(m,n,:)为第m个子载波，第n个OFDM符号被NR个接收天线接收的数据向量
 % P_symbol=0;
