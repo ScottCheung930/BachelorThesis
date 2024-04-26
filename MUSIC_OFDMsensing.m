@@ -3,7 +3,7 @@
 % k:target number
 % Author: Yunbo HU(SIMIT, UCAS)
 % GitHub: https://github.com/edenhu1111
-function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, Delta_theta, angle_dir)
+function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, Delta_theta,angle_dir)
     global  NR
     %% DoA estimation
     [V,D]=eig(R);
@@ -16,6 +16,7 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, Delta_theta, angle_dir
     for ii=1:length(theta)
         P_music_theta(ii)=1/(A(:,ii)'*(U_n*U_n')*A(:,ii));
     end
+    P_music_theta=abs(P_music_theta);
     theta=theta+angle_dir;
 end
 

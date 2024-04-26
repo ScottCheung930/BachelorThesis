@@ -1,7 +1,7 @@
-function [range, velocity, P_TauDoppler]=Periodogram_OFDMsensing(RxData, TxData)
+function [range, velocity, P_TauDoppler]=Periodogram_OFDMsensing(RxData_sensing, TxData_origin)
 global M Ns c0 fc Ts delta_f Fp;
 
-G=RxData./TxData;
+G=RxData_sensing./TxData_origin;
 Kp=2^(ceil(log2(M)));% tau->range
 Mp=2^(ceil(log2(Fp*Ns)));% doppler->velocity
 P_TauDoppler=ifft( fft(G,Mp,2) , Kp , 1);%P_TauDoppler(tau,doppler);
