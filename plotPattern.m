@@ -22,6 +22,7 @@ function [Pattern, Delta_theta]=plotPattern(phi,ifPlot,ifBeamWidth)%phi为天线
         title(text);
         
         saveas(gcf,'./fig/ArrayFactor.png');
+        close(gcf);
     end
     
     Delta_theta=0;

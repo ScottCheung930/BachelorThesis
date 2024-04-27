@@ -7,8 +7,8 @@ Mp=2^(ceil(log2(Fp*Ns)));% doppler->velocity
 delta_r=c0/(2*delta_f*Kp);
 delta_v=c0/(2*fc*Ts*Mp);
 
-W=kron(ones(1,Mp),barthannwin(M));
-P_TauDoppler=ifft(fft(G,Mp,2).*W, Kp , 1);%P_TauDoppler(tau,doppler);
+%W=kron(ones(1,Mp),barthannwin(M));
+P_TauDoppler=ifft(fft(G,Mp,2), Kp , 1);%P_TauDoppler(tau,doppler);
 
 tau1=round(10*(2*delta_f*Kp)/c0);
 tau2=round(90*(2*delta_f*Kp)/c0);
@@ -18,7 +18,7 @@ P_TauDoppler=P_TauDoppler(tau1:tau2,dopp1:dopp2);
 P_TauDoppler=conj(P_TauDoppler).*P_TauDoppler;
 P_TauDoppler = 10*log10(P_TauDoppler/N0);
 fprintf("peak SNR=%.2f\n",max(max(P_TauDoppler)));
-if(max(max(P_TauDoppler))<135)%80m,主瓣边缘=148.772
+if(max(max(P_TauDoppler))<149.224)%80m,主瓣边缘
     ifExist=0;
 else
     ifExist=1;
