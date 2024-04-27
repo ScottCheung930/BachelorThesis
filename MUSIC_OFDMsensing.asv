@@ -13,7 +13,7 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end,
     [d,ind_D] = sort(diag(D),'descend');
     L=MDL(d);
     if(L==0)
-         fprintf("According to MDL criterion, L=0\n");
+         fprintf("max(SNR)<20dB, No Target\n");
         return;
     end
     U_n=V(:,ind_D(L+1:end));
@@ -27,7 +27,7 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end,
     P_music_theta=P_music_theta/max(P_music_theta);
     P_music_theta=10*log10(P_music_theta);
     if(range(P_music_theta)<0.05)
-        fprintf("No MUSIC peak!\n");
+        fprintf("L=0, max(SNR)=%.2f dB\n",d(1)/N0);
         L=0;
     end
 end

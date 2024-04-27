@@ -20,6 +20,8 @@ function [Pattern, Delta_theta]=plotPattern(phi,ifPlot,ifBeamWidth)%phi为天线
         polarplot(theta_radians, Pattern);
         text=["ULA Pattern with NT=NR="+num2str(NT)];
         title(text);
+        
+        saveas(gcf,'./fig/ArrayFactor.png');
     end
     
     Delta_theta=0;
@@ -35,7 +37,7 @@ function [Pattern, Delta_theta]=plotPattern(phi,ifPlot,ifBeamWidth)%phi为天线
     end
     
     Pattern = Pattern/NT; %归一化
-    Delta_theta=Delta_theta*1.5;
+    %Delta_theta=Delta_theta*1.5;
     %在扫描过程中，波束宽度会逐渐增大
     %增大的比例近似为1/cos(方向角)，当方向角为60°时，增大至2倍
 end
