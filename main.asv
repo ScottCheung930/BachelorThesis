@@ -21,9 +21,9 @@ tic;
 %v = [20, 33 ,15,10, 26];  %Velocity
 %theta = [-60, -20, 15,44,-54.9]; % Angle
 
- r=    [ 59    61    66    45    75    49        35    32    53];
+ r=    [ 59    61    66    45    75    49    28    35    32    53];
  v=   [ 11    31    20    15    38    39    25    16    38    10];
- theta=[    -42   -50    45    54    42   -36   -34   -47    56    -2];
+ theta=[    -42   -50    45    54    42   13   -34   -47    56    -2];
 %  r=    [      55    65    66    66    37    69    59    72    75    43];
 %   v=    [  20    37    22     5    27    15    11    31    11    10];
 %   theta=    [  26   -19    59   -25   -11   -49   -15   -31   -38    19];
@@ -68,7 +68,7 @@ data = randi([0 qam-1], M, N); % M行N列整数矩阵，使用M个子载波的N�
 TxData = qammod(data, qam, 'gray'); % bit->symbol，使用16-QAM，Gray码
 %y = qammod(data, 16, 'UnitAveragePower', true, 'PlotConstellation', true);
 
- % Generate 
+ % Beamforming
 Tx=zeros(M,N,NT);
 for ii=1:NT
     Tx(1:M,1:N,ii)=TxData;
@@ -91,18 +91,21 @@ r_v_time=0;
 %% Start receiving
 h = waitbar(0, 'Processing...'); % 创建进度条
 flag=0;
-[Pattern_comm, ~]=plotPattern(-2,0,0);
+angle_comm=theta(end);
+[Pattern_comm, ~]=plotPattern(,0,0);
 for kk = 1:Ndir 
        temp=toc;
        P_symbol=0;
        [Pattern_sense, ~]=plotPattern(angle_dir,0,0);%更新阵列因子
        Pattern=(Pattern_sense+Pattern_comm)./2;
+       pos=0:(NT-1);
+       beamforming=exp(-j*pi*sind(angle_dir).*(pos.'));
        %N个OFDM符号
        for ii = 1:Ns
            P_symbol_ii=0;
            %M个子载波
            for jj=1:M
-               Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'*reshape(Tx(jj,(Ns*(kk-1)+ii),1:NT),NT,1); 
+               Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'*(beamforming*reshape(Tx(jj,(Ns*(kk-1)+ii),1:NT),NT,1)); 
                Rx_sensing(jj,ii,1:NR)=Rx;
                P_symbol_ii=P_symbol_ii+1/NR*(Rx'*Rx);
            end
@@ -211,9 +214,9 @@ for kk = 1:Ndir
         [max_P,V_Ind]=max(matrix.');
         
         %max_P=conv(max_P,[0.33,0.33,0.33]);
-        [pks,maxTau]=findpeaks(max_P,'MinPeakProminence',10,'MinPeakDistance',3,'MinPeakHeight',max(max_P)-100);
+        [pks,maxTau]=findpeaks(max_P,'MinPeakProminence',7,'MinPeakDistance',2,'MinPeakHeight',max(max_P)-100);
         meanHeight=mean(pks);
-        [pks,index]=findpeaks(pks,'MinPeakProminence',10,'MinPeakHeight',75);
+        [pks,index]=findpeaks(pks,'MinPeakProminence',7,'MinPeakHeight',75);
         maxTau=maxTau(index);
         %[pks,maxTau]=findpeaks(max_P,'MinPeakDistance',3,'MinPeakHeight',max(max_P)-100);
         %[pks,maxTau]=findpeaks(max_P,'MinPeakDistance',3,'MinPeakHeight',max(max_P)-50);

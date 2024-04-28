@@ -17,9 +17,9 @@ figureNumber=1;
 tic;
 
 %% Targets Information
-%r = [80,20, 30, 37, 25];  %Range
-%v = [20, 33 ,15,10, 26];  %Velocity
-%theta = [-60, -20, 15,44,-54.9]; % Angle
+% r = [80,20, 30, 37, 25];  %Range
+% v = [20, 33 ,15,10, 26];  %Velocity
+% theta = [-60, -20, 15,44,-54.9]; % Angle
 
  r=    [ 59    61    66    45    75    49    28    35    32    53];
  v=   [ 11    31    20    15    38    39    25    16    38    10];
@@ -68,7 +68,7 @@ data = randi([0 qam-1], M, N); % M行N列整数矩阵，使用M个子载波的N�
 TxData = qammod(data, qam, 'gray'); % bit->symbol，使用16-QAM，Gray码
 %y = qammod(data, 16, 'UnitAveragePower', true, 'PlotConstellation', true);
 
- % Generate 
+ % Beamforming
 Tx=zeros(M,N,NT);
 for ii=1:NT
     Tx(1:M,1:N,ii)=TxData;
@@ -91,18 +91,25 @@ r_v_time=0;
 %% Start receiving
 h = waitbar(0, 'Processing...'); % 创建进度条
 flag=0;
-[Pattern_comm, ~]=plotPattern(-2,0,0);
+angle_comm=theta(end);
+[Pattern_comm, ~]=plotPattern(angle_comm,0,0);
+pos=0:(NT-1);
+beamforming_comm=exp(-j*pi*sind(angle_comm).*(pos.'));
+
 for kk = 1:Ndir 
        temp=toc;
        P_symbol=0;
        [Pattern_sense, ~]=plotPattern(angle_dir,0,0);%更新阵列因子
        Pattern=(Pattern_sense+Pattern_comm)./2;
+       pos=0:(NT-1);
+       beamforming_sense=exp(-j*pi*sind(angle_dir).*(pos.'));
+       beamforming=0.5*sqrt(2)*beamforming_sense+0.5*sqrt(2)*beamforming_comm;
        %N个OFDM符号
        for ii = 1:Ns
            P_symbol_ii=0;
            %M个子载波
            for jj=1:M
-               Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'*reshape(Tx(jj,(Ns*(kk-1)+ii),1:NT),NT,1); 
+               Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'*(beamforming.*reshape(Tx(jj,(Ns*(kk-1)+ii),1:NT),NT,1)); 
                Rx_sensing(jj,ii,1:NR)=Rx;
                P_symbol_ii=P_symbol_ii+1/NR*(Rx'*Rx);
            end
@@ -125,7 +132,7 @@ for kk = 1:Ndir
        % Received Symbol Decision
        for iii=1:Ns
          for jjj=1:M
-              RxData_sensing(jjj,iii)=sum(Rx_sensing(jjj,iii,1:NR));
+              RxData_sensing(jjj,iii)=beamforming_sense'*reshape(Rx_sensing(jjj,iii,1:NR),NR,1);
          end
        end
        receiving_time=receiving_time+toc-temp;
@@ -151,6 +158,7 @@ for kk = 1:Ndir
         TxData_origin=TxData(:,(Ns*(kk-1)+1):(Ns*(kk-1)+ii));
         [ifExist, delta_r, delta_v, range, velocity, P_TauDoppler]=Periodogram_OFDMsensing(RxData_sensing, TxData_origin,N0);
         r_v_time=r_v_time+toc-temp;
+
         
         temp=toc;
         % MUSIC 进行 DoA估计，得到角度谱和估计目标数

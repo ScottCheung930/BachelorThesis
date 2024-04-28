@@ -2,7 +2,7 @@
 %%
 function [Pattern, Delta_theta]=plotPattern(phi,ifPlot,ifBeamWidth)%phi为天线最大辐射方向(角度制)
     global NT figureNumber;
-    %NT=10;phi=50;
+    %NT=10;phi=50;ifPlot=0;ifBeamWidth=1;
     theta=-180:0.1:179.9;
     theta_radians=deg2rad(theta);
     phi_radians=deg2rad(phi);
