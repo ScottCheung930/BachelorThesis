@@ -17,14 +17,27 @@ figureNumber=1;
 tic;
 
 %% Targets Information
-r = [80,20, 30, 37, 25];  %Range (it can be a row vector)
-v = [20, 33 ,15,10, 26];  %Velocity
-theta = [-60, -20, 15,44,-54.9]; % Angle
+%r = [80,20, 30, 37, 25];  %Range
+%v = [20, 33 ,15,10, 26];  %Velocity
+%theta = [-60, -20, 15,44,-54.9]; % Angle
+
+ r=    [ 59    61    66    45    75    49    28    35    32    53];
+ v=   [ 11    31    20    15    38    39    25    16    38    10];
+ theta=[    -42   -50    45    54    42   13   -34   -47    56    -2];
+%  r=    [      55    65    66    66    37    69    59    72    75    43];
+%   v=    [  20    37    22     5    27    15    11    31    11    10];
+%   theta=    [  26   -19    59   -25   -11   -49   -15   -31   -38    19];
+% r = round(55 * rand(1,10) + 25);
+% v = round(40 * rand(1,10) );
+% theta =round(120 * rand(1,10) - 60);
+disp(r);
+disp(v);
+disp(theta);
 
 %% System parameters
 NR = 50; %接收天线数（与发射天线相等）
 NT = 50; %发射天线数
-[~, Delta_theta]=plotPattern(0,1,1);
+[~, Delta_theta]=plotPattern(0,0,1);
 %Delta_theta=60;
 %Delta_theta为NT个振子，半波长间隔ULA天线的-10dB主瓣宽度
 %Pattern为归一化阵列因子
@@ -78,11 +91,12 @@ r_v_time=0;
 %% Start receiving
 h = waitbar(0, 'Processing...'); % 创建进度条
 flag=0;
-
+[Pattern_comm, ~]=plotPattern(-2,0,0);
 for kk = 1:Ndir 
        temp=toc;
        P_symbol=0;
-       [Pattern, ~]=plotPattern(angle_dir,0,0);%更新阵列因子
+       [Pattern_sense, ~]=plotPattern(angle_dir,0,0);%更新阵列因子
+       Pattern=(Pattern_sense+Pattern_comm)./2;
        %N个OFDM符号
        for ii = 1:Ns
            P_symbol_ii=0;
@@ -114,7 +128,7 @@ for kk = 1:Ndir
               RxData_sensing(jjj,iii)=sum(Rx_sensing(jjj,iii,1:NR));
          end
        end
-       receiving_time=receiving_time-toc-temp;
+       receiving_time=receiving_time+toc-temp;
 %% Process a direction
        temp=toc;
        % Covariance Matrix
@@ -128,14 +142,17 @@ for kk = 1:Ndir
             R=R+R0./Ns;
         end
         R=R./M;
-
+        doa_time=doa_time+toc-temp;
     %% Parameter Estimation
         %L_estimate=4;
         
+        temp=toc;
         %Periodogram 进行 Doppler-Delay估计，得到多普勒-时延谱
         TxData_origin=TxData(:,(Ns*(kk-1)+1):(Ns*(kk-1)+ii));
         [ifExist, delta_r, delta_v, range, velocity, P_TauDoppler]=Periodogram_OFDMsensing(RxData_sensing, TxData_origin,N0);
+        r_v_time=r_v_time+toc-temp;
         
+        temp=toc;
         % MUSIC 进行 DoA估计，得到角度谱和估计目标数
         if(ifExist==1)
             [theta_estimate, P_music_theta, L_estimate] = MUSIC_OFDMsensing(R, angle_start, angle_end); 
@@ -148,13 +165,15 @@ for kk = 1:Ndir
         end
         
         %% Find MUSIC peaks 
-        if(L_estimate==0)
-            angle_dir=angle_dir+Delta_theta;
-            fprintf(str);fprintf('\n\n')
-            waitbar(kk/Ndir, h, sprintf('Processing... %d%%', round(kk/Ndir*100)));
-            continue;
-        end
-        [Peaks,index]=findpeaks(P_music_theta,'MinPeakProminence',10);
+%         if(L_estimate==0)
+%             angle_dir=angle_dir+Delta_theta;
+%             fprintf(str);fprintf('\n');
+%             fprintf('L_estimate=0');
+%             fprintf('\n');            
+%             waitbar(kk/Ndir, h, sprintf('Processing... %d%%', round(kk/Ndir*100)));
+%             continue;
+%         end
+        [Peaks,index]=findpeaks(P_music_theta,'MinPeakProminence',5);
         if(P_music_theta(1)>-0.1 && P_music_theta(1)-min(P_music_theta)>10)
             Peaks=[Peaks,P_music_theta(1)];
             index=[index,1];
@@ -166,7 +185,8 @@ for kk = 1:Ndir
         L_estimate=min(L_estimate,length(index));
         if(L_estimate==0)
             angle_dir=angle_dir+Delta_theta;
-            fprintf(str);fprintf('\n\n')
+            fprintf(str);fprintf('\n');
+            fprintf('can not find siginficant peaks!\n\n');
             waitbar(kk/Ndir, h, sprintf('Processing... %d%%', round(kk/Ndir*100)));
             continue;
         end
@@ -182,14 +202,28 @@ for kk = 1:Ndir
         end
         
         %保存当前方向doa估计结果
-        doa_result=vertcat(theta_estimate(index(indexx)),P_music_theta(indexx));
+        doa_result=vertcat(theta_estimate(index(indexx)),Peaks(indexx));
         doa_result=doa_result.';
+        doa_time=doa_time+toc-temp;
         %%  Find Tau-Doppler peaks
+        temp=toc;
         matrix=P_TauDoppler;
         [max_P,V_Ind]=max(matrix.');
-        [pks,maxTau]=findpeaks(max_P,'MinPeakDistance',1,'MinPeakHeight',max(max_P)-22);
-        maxDoppler=V_Ind(maxTau);
         
+        %max_P=conv(max_P,[0.33,0.33,0.33]);
+        [pks,maxTau]=findpeaks(max_P,'MinPeakProminence',7,'MinPeakDistance',2,'MinPeakHeight',max(max_P)-100);
+        meanHeight=mean(pks);
+        [pks,index]=findpeaks(pks,'MinPeakProminence',7,'MinPeakHeight',75);
+        maxTau=maxTau(index);
+        %[pks,maxTau]=findpeaks(max_P,'MinPeakDistance',3,'MinPeakHeight',max(max_P)-100);
+        %[pks,maxTau]=findpeaks(max_P,'MinPeakDistance',3,'MinPeakHeight',max(max_P)-50);
+        %directionality=length(pks);
+        %index=find(pks>max(pks)-22);
+        %pks= pks(index);
+        %maxTau=maxTau(index);
+        %[pks,maxTau]=findpeaks(max_P,'MinPeakDistance',1,'MinPeakHeight',max(max_P)-22);
+       
+        maxDoppler=V_Ind(maxTau);
         peaks_num=length(pks);
         
         fprintf("Estimated range=");
@@ -207,8 +241,11 @@ for kk = 1:Ndir
         end
         
         %保存当前方向r-v估计结果
-        r_v_result=vertcat(range(maxTau(1:peaks_num)),velocity(maxDoppler(1:peaks_num)),pks);
+        %r_v_result=vertcat(range(maxTau(1:peaks_num)),velocity(maxDoppler(1:peaks_num)),pks,repmat(directionality,1,peaks_num));
+        r_v_result=vertcat(range(maxTau(1:peaks_num)),velocity(maxDoppler(1:peaks_num)),pks,round(10*pks./meanHeight));
         r_v_result=r_v_result.';
+        
+        r_v_time=r_v_time+toc-temp;
         
         %% 保存当前结果
         if(peaks_num>L_estimate)
@@ -231,7 +268,12 @@ for kk = 1:Ndir
 end
 
 %% 去除冗余目标点
-Zsort=sortrows(Z,[1,-3]);%先按距离r升序，然后按功率谱降序排列
+Zsort=sortrows(Z,[1,-3]);
+%Zsort(:,4)=1./Zsort(:,4);
+%Zsort(:,4)=floor(abs(Zsort(:,4)-mean(Zsort(:,4)))/(2*std(Zsort(:,4))));
+%Zsort(:,4)=round(10*Zsort(:,4));
+%Zsort=sortrows(Zsort,[1,-4,-3]);%先按距离r升序，然后按相对峰值功率和绝对峰值降序排列
+Zsort=sortrows(Zsort,[1,-4,-3]);
 Zprun=Zsort(1,:);
 Target_Num=1;
 [Num0,~]=size(Zsort);
@@ -255,14 +297,14 @@ fprintf("after pruning, TargetNum=%d\n",Target_Num);
 %% 
 figure(figureNumber);
 subplot(1,2,1)
-polarplot(deg2rad(Z(:,4)),Z(:,1),'*');
+polarplot(deg2rad(Z(:,5)),Z(:,1),'*');
 hold on
 polarplot(deg2rad(theta),r,'o');
 hold off
 thetalim([-60,60]);
 title("Before Pruning");
 subplot(1,2,2)
-polarplot(deg2rad(Zprun(:,4)),Zprun(:,1),'*');
+polarplot(deg2rad(Zprun(:,5)),Zprun(:,1),'*');
 hold on
 polarplot(deg2rad(theta),r,'o');
 hold off
@@ -270,7 +312,7 @@ thetalim([-60,60]);
 title("After Pruning");
 str=['./fig/Figure ',num2str(figureNumber),'_Performance.png'];
 saveas(gcf, str);
-close(h);
+%close(h);
 total_time=toc;
 fprintf("总耗时：%.2f秒\n",total_time);
 

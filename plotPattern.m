@@ -20,8 +20,8 @@ function [Pattern, Delta_theta]=plotPattern(phi,ifPlot,ifBeamWidth)%phi为天线
         polarplot(theta_radians, Pattern);
         text=["ULA Pattern with NT=NR="+num2str(NT)];
         title(text);
-        
-        saveas(gcf,'./fig/ArrayFactor.png');
+        str=['./fig/ArrayFactor'+num2str(figureNumber)+'.png'];
+        saveas(gcf,str);
         close(gcf);
     end
     
