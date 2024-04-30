@@ -20,7 +20,7 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end)
     theta=linspace(angle_start,angle_end,round((angle_end-angle_start)/0.35));
     A=steeringGen(theta, NR);
     P_music_theta=zeros(1,length(theta));
-    for ii=1:length(theta)
+    parfor ii=1:length(theta)
         %P_music_theta(ii)=diag(1./d(1:L))*(A(:,ii)'*(U_s*U_s')*A(:,ii))/(A(:,ii)'*(U_n*U_n')*A(:,ii));
         P_music_theta(ii)=1/(A(:,ii)'*(U_n*U_n')*A(:,ii));
     end

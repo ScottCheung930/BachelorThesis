@@ -15,31 +15,7 @@ delete(fullfile('./fig/','*_Performance.png'));
 global c0 fc lambda M N Ns Ndir delta_f Ts  NR NT Fp Delta_theta figureNumber; % 定义全局变量 %CPsize
 figureNumber=1;
 tic;
-
-%SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0
-MC_time=0;
-RMSE_DoA=zeros(1,6);
-RMSE_range=zeros(1,6);
-RMSE_velocity=zeros(1,6);
-RMSE_pos=zeros(1,6);
-Pr_detect=zeros(1,6);
-%for SNR=0
-SNR=0;
-    %% Targets Information
-    % r = [80,20, 30, 37, 25];  %Range
-    % v = [20, 23 ,27,32, 38];  %Velocity
-    % theta = [-60, -20, 15,44,-54.9]; % Angle
-  r=    [ 59    61    66    45    75    49    28    35    32    53];
-  v=   [ 11    31    20    15    38    39    25    16    38    10];
-  theta=[ -42   -50    45    54    42   13   -34   -47    56    -2];
-%     r = round(55 * rand(1,12) + 25);
-%     v = round(40 * rand(1,12) );
-%     theta =round(120 * rand(1,12) - 60);
-    disp(r);
-    disp(v);
-    disp(theta);
-
-    %% System parameters
+%% System parameters
     NR = 50; %接收天线数（与发射天线相等）
     NT = 50; %发射天线数
     [~, Delta_theta]=plotAF(0,0,1);
@@ -67,6 +43,42 @@ SNR=0;
     bitsPerSymbol = 4; % 每符号比特数
     qam = 2^(bitsPerSymbol); % QAM调制，每正交方向bitsPerSymbo个幅度取值
 
+
+%% 蒙特卡洛实验
+%SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0
+MC_time=0;
+Total_MC_time=1;
+RMSE_DoA=zeros(1,6);
+RMSE_range=zeros(1,6);
+RMSE_velocity=zeros(1,6);
+RMSE_pos=zeros(1,6);
+Pr_detect=zeros(1,6);
+
+%开启并行池
+parpool('Processes','4');
+CoreNum=4;                     %CPU核心数
+if isempty(gcp('nocreate'))%如果并行未开启
+    parpool(CoreNum);       %开启16个并行工作池
+end
+
+ h = waitbar(0, 'Processing...'); % 创建进度条
+ 
+ %开始循环
+for SNR=0:0
+    %% Targets Information
+    % r = [80,20, 30, 37, 25];  %Range
+    % v = [20, 23 ,27,32, 38];  %Velocity
+    % theta = [-60, -20, 15,44,-54.9]; % Angle
+     r=    [ 59    61    66    45    75    49    28    35    32    53];
+     v=   [ 11    31    20    15    38    39    25    16    38    10];
+     theta=[ -42   -50    45    54    42   13   -34   -47    56    -2];
+    %     r = round(55 * rand(1,12) + 25);
+    %     v = round(40 * rand(1,12) );
+    %     theta =round(120 * rand(1,12) - 60);
+    disp(r);
+    disp(v);
+    disp(theta);
+
     %% Generate Transmission data
     data = randi([0 qam-1], M, N); % M行N列整数矩阵，使用M个子载波的N个OFDM符号
                                                         % randi([0 qam-1], ___) 包含从区间 [0,qam-1] 的均匀离散分布中得到的整数
@@ -75,8 +87,8 @@ SNR=0;
 
 
     Tx=zeros(M,N,NT);
-    for ii=1:NT
-        Tx(1:M,1:N,ii)=TxData;
+    parfor ii=1:NT
+        Tx(:,:,ii)=TxData;
     end
 
     %% Receiver
@@ -94,20 +106,21 @@ SNR=0;
     doa_time=0;
     r_v_time=0;
     %% Start receiving
-    h = waitbar(0, 'Processing...'); % 创建进度条
+
     flag=0;
     angle_comm=theta(end);%令最后一个位置为通信用户
     [Pattern_comm, ~]=plotAF(angle_comm,0,0);
     pos=0:(NT-1);
     beamforming_comm=exp(-j*pi*sind(angle_comm).*(pos.'));
   
+    %扫描Ndir个方向
     for kk = 1:Ndir
             temp=toc;
            %下一个扫描方向
             if(kk~=1)
                 angle_sense=angle_sense+Delta_theta;
-                waitbar((kk+MC_time*Ndir)/(Ndir*6), h, sprintf('Processing... %d%%，remain：%.2f', ...
-                    round(100*(kk+MC_time*Ndir)/(Ndir*6)),((Ndir*(6-MC_time)-kk)/(kk+MC_time*Ndir))*temp));
+                waitbar((kk+MC_time*Ndir)/(Ndir*Total_MC_time), h, sprintf('Processing... %d%%，remain：%.2f', ...
+                    round(100*(kk+MC_time*Ndir)/(Ndir*Total_MC_time)),((Ndir*(Total_MC_time-MC_time)-kk)/(kk+MC_time*Ndir))*temp));
             end
 
            %当接收到Ns个OFDM符号时，进行一次DoA估计
@@ -133,15 +146,19 @@ SNR=0;
     %         saveas(gcf,str1);
     %         close(gcf);
 
+           Ns_temp=Ns;
+           NR_temp=NR;
+           NT_temp=NT;
            %Ns个OFDM符号
            for ii = 1:Ns
                P_symbol_ii=0;
                %M个子载波
-               for jj=1:M
+               ii_temp=Ns_temp*(kk-1)+ii;
+               parfor jj=1:M
                    Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'...
-                   *(beamforming.*reshape(Tx(jj,(Ns*(kk-1)+ii),1:NT),NT,1)); 
-                   Rx_sensing(jj,ii,1:NR)=Rx;
-                   P_symbol_ii=P_symbol_ii+1/NR*(Rx'*Rx);
+                   *(beamforming.*reshape(Tx(jj,ii_temp,:),NT_temp,1)); 
+                   Rx_sensing(jj,ii,:)=Rx;
+                   P_symbol_ii=P_symbol_ii+1/NR_temp*(Rx'*Rx);
                end
                P_symbol_ii=P_symbol_ii/M;
                P_symbol=P_symbol+P_symbol_ii;
@@ -149,14 +166,14 @@ SNR=0;
            P_symbol=P_symbol/Ns;%计算平均每符号功率
            Rx_sensing=Rx_sensing/P_symbol;%归一化接收信号能量；
            N0=10^(-SNR/10);%N0：单边噪声功率
-
+           
            % Add Noise  (此处设信自干扰比SSIR为0)
            Rx_sensing=Rx_sensing+sqrt(N0).*(randn(M,Ns,NR)+1j*randn(M,Ns,NR))/sqrt(2);
 
            % Received Symbol
            for iii=1:Ns
-             for jjj=1:M
-                  RxData_sensing(jjj,iii)=beamforming_sense'*reshape(Rx_sensing(jjj,iii,1:NR),NR,1);
+             parfor jjj=1:M
+                  RxData_sensing(jjj,iii)=beamforming_sense'*reshape(Rx_sensing(jjj,iii,:),NR_temp,1);
              end
            end
            receiving_time=receiving_time+toc-temp;
@@ -166,8 +183,8 @@ SNR=0;
             R=zeros(NR,NR);
             for jjj=1:M
                 R0=zeros(NR,NR);
-                for iii=1:Ns
-                   y=reshape(Rx_sensing(jjj,iii,1:NR),NR,1);
+                parfor iii=1:Ns
+                   y=reshape(Rx_sensing(jjj,iii,:),NR_temp,1);
                    R0=R0+y*y';
                 end
                 R=R+R0./Ns;
@@ -247,11 +264,6 @@ SNR=0;
     end
 
     %% 去除冗余目标点
-    %Zsort=sortrows(Z,[1,-3]);
-    %Zsort(:,4)=1./Zsort(:,4);
-    %Zsort(:,4)=floor(abs(Zsort(:,4)-mean(Zsort(:,4)))/(2*std(Zsort(:,4))));
-    %Zsort(:,4)=round(10*Zsort(:,4));
-    %Zsort=sortrows(Zsort,[1,-4,-3]);
     temp=toc;
     Zsort=sortrows(Z,[1,-4,-3]);%先按第1列距离r升序，然后按相对峰值(第4列)和绝对峰值(第3列)降序排列
     Zprun=Zsort(1,:);
@@ -299,9 +311,9 @@ SNR=0;
     figureNumber=figureNumber+1;
     saveas(gcf, str);
     total_time=toc;
-    %fprintf("总耗时：%.2f s\n",total_time);
-    %fprintf("准备时间占%.2f %%\t 发送接收耗时占 %.2f%%\t DoA估计耗时占%.2f%%\t 距离速度估计耗时占%2f%%\t"...
-    %           ,100*prepare_time/total_time, 100*receiving_time/total_time, 100*doa_time/total_time,100*r_v_time/total_time);
+    fprintf("总耗时：%.2f s\n",total_time);
+    fprintf("准备时间占%.2f %%\t 发送接收耗时占 %.2f%%\t DoA估计耗时占%.2f%%\t 距离速度估计耗时占%2f%%\t"...
+               ,100*prepare_time/total_time, 100*receiving_time/total_time, 100*doa_time/total_time,100*r_v_time/total_time);
     %% 计算误差
     MC_time=MC_time+1;
     Position=[r;v;theta];
@@ -342,7 +354,7 @@ SNR=0;
     RMSE_range(MC_time)=sqrt(RMSE_range(MC_time));  %距离估计
     RMSE_velocity(MC_time)=sqrt(RMSE_velocity(MC_time));%速度估计
         
-%end
+end
 
 %% 画图分析
 SNR=-30:5:-5;
