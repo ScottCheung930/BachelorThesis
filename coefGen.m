@@ -8,6 +8,6 @@ function Beta = coefGen(n,m,range,velocity,theta,Pattern)
     h_pathloss = c0./((fc).*(range).^2); %路径损耗
     h_pattern = Pattern(round((theta+180)*10+1));
     doppler = 2*velocity/lambda;    %各目标的多普勒频移，这里的速度是在LoS方向的分量
-            %Beta=h_pathloss.*exp(1j*2*pi*(n-1)*Ts.*doppler).*exp(-1j*2*pi*(m-1)*delta_f.*delay);
-            Beta=h_pathloss.*h_pattern.*exp(1j*2*pi*(n-1)*Ts.*doppler).*exp(-1j*2*pi*(m-1)*delta_f.*delay);
+    %Beta=h_pathloss.*exp(1j*2*pi*(n-1)*Ts.*doppler).*exp(-1j*2*pi*(m-1)*delta_f.*delay);
+    Beta=h_pathloss.*h_pattern.*exp(1j*2*pi*(n-1)*Ts.*doppler).*exp(-1j*2*pi*(m-1)*delta_f.*delay);
 end

@@ -1,14 +1,10 @@
 %% MUSIC_OFDMsensing
-% CIM: Input channel information matrix(pre-processed by known transmitted symbols)
-% k:target number
-% Author: Yunbo HU(SIMIT, UCAS)
-% GitHub: https://github.com/edenhu1111
 function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end)
     global  NR
     %% DoA estimation
     Iv=eye(NR,NR);
     Iv=fliplr(Iv);
-    R=R+Iv*conj(R)*Iv;%Toeplitz化
+    R=R+Iv*conj(R)*Iv;%改进MUSIC
     [V,D]=eig(R);
     [d,ind_D] = sort(diag(D),'descend');
     L=MDL(d);
@@ -18,9 +14,10 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end)
          P_music_theta=0;
         return;
     end
+
     U_n=V(:,ind_D(L+1:end));
     %U_s=V(:,ind_D(1:L));
-    theta=linspace(angle_start,angle_end,round(min(50,(angle_end-angle_start)/0.35)));
+    theta=linspace(angle_start,angle_end,round((angle_end-angle_start)/0.35));
     A=steeringGen(theta, NR);
     P_music_theta=zeros(1,length(theta));
     for ii=1:length(theta)
@@ -30,8 +27,7 @@ function [theta, P_music_theta, L] = MUSIC_OFDMsensing(R, angle_start,angle_end)
     P_music_theta=abs(P_music_theta);
     P_music_theta=P_music_theta/max(P_music_theta);
     P_music_theta=10*log10(P_music_theta);
-    if(range(P_music_theta)<0.1)
-        fprintf("No MUSIC peak!\n");
+    if(range(P_music_theta)<1)
         L=0;
     end
 end
