@@ -54,8 +54,6 @@ RMSE_velocity=zeros(1,6);
 RMSE_pos=zeros(1,6);
 Pr_detect=zeros(1,6);
 
-%开启并行池
-parpool('Processes','4');
 CoreNum=4;                     %CPU核心数
 if isempty(gcp('nocreate'))%如果并行未开启
     parpool(CoreNum);       %开启16个并行工作池
@@ -78,13 +76,21 @@ for SNR=0:0
     disp(r);
     disp(v);
     disp(theta);
-
+    
+    %更新Doppler相移  
+   doppler=kron( (0:Ns-1).',(2*velocity/lambda)); %Ns行L列
+   doppler_phase=exp(1j*2*pi*doppler);
+   %更新时延相移矢量
+   delay=kron((0:M-1).',(2 .* range ./ c0));
+   delay_pahse=exp(-1j*2*pi*delay); %M行L列
+   %更新路径损耗
+   h_pathloss = c0./((fc).*(range).^2);
+    
     %% Generate Transmission data
     data = randi([0 qam-1], M, N); % M行N列整数矩阵，使用M个子载波的N个OFDM符号
                                                         % randi([0 qam-1], ___) 包含从区间 [0,qam-1] 的均匀离散分布中得到的整数
     TxData = qammod(data, qam, 'gray'); % bit->symbol，使用16-QAM，Gray码
     %y = qammod(data, 16, 'UnitAveragePower', true, 'PlotConstellation', true);
-
 
     Tx=zeros(M,N,NT);
     parfor ii=1:NT
@@ -123,19 +129,21 @@ for SNR=0:0
                     round(100*(kk+MC_time*Ndir)/(Ndir*Total_MC_time)),((Ndir*(Total_MC_time-MC_time)-kk)/(kk+MC_time*Ndir))*temp));
             end
 
-           %当接收到Ns个OFDM符号时，进行一次DoA估计
+           %当接收到Ns个OFDM符号时，进行一次估计
            angle_start = angle_sense-0.65*Delta_theta;%搜索区间
            angle_end  = angle_sense+0.65*Delta_theta;
            str=["["+num2str(angle_start)+"°,"+num2str(angle_end)+"°]"];
            fprintf("Within "); fprintf(str); fprintf('\n');
 
-           P_symbol=0;
-           [Pattern_sense, ~]=plotAF(angle_sense,0,0);%更新阵列因子
+           %更新阵列因子
+           [Pattern_sense, ~]=plotAF(angle_sense,0,0);
            Pattern=(Pattern_sense+Pattern_comm)./2;
-           pos=0:(NT-1);%更新波束成形矢量
+           h_pattern = Pattern(round((theta+180)*10+1));
+           %更新波束成形矢量
+           pos=0:(NT-1);
            beamforming_sense=exp(-j*pi*sind(angle_sense).*(pos.'));
            beamforming=0.5*sqrt(2)*beamforming_sense+0.5*sqrt(2)*beamforming_comm;
-
+           
             %画方向图
     %         figure(figureNumber);
     %         figureNumber=figureNumber+1;
@@ -149,13 +157,14 @@ for SNR=0:0
            Ns_temp=Ns;
            NR_temp=NR;
            NT_temp=NT;
-           %Ns个OFDM符号
+           P_symbol=0;
+           %Ns个OFDM符号              
            for ii = 1:Ns
                P_symbol_ii=0;
                %M个子载波
                ii_temp=Ns_temp*(kk-1)+ii;
-               parfor jj=1:M
-                   Rx=Ar*diag(coefGen(ii,jj,r,v,theta,Pattern))*At.'...
+               for jj=1:M
+                   Rx=Ar*diag(h_pathloss.*h_pattern.*delay_phase(jj).*doppler_phase(ii))*At.'...
                    *(beamforming.*reshape(Tx(jj,ii_temp,:),NT_temp,1)); 
                    Rx_sensing(jj,ii,:)=Rx;
                    P_symbol_ii=P_symbol_ii+1/NR_temp*(Rx'*Rx);
@@ -171,6 +180,7 @@ for SNR=0:0
            Rx_sensing=Rx_sensing+sqrt(N0).*(randn(M,Ns,NR)+1j*randn(M,Ns,NR))/sqrt(2);
 
            % Received Symbol
+           
            for iii=1:Ns
              parfor jjj=1:M
                   RxData_sensing(jjj,iii)=beamforming_sense'*reshape(Rx_sensing(jjj,iii,:),NR_temp,1);
@@ -181,15 +191,11 @@ for SNR=0:0
            temp=toc;
            % Covariance Matrix
             R=zeros(NR,NR);
-            for jjj=1:M
-                R0=zeros(NR,NR);
-                parfor iii=1:Ns
-                   y=reshape(Rx_sensing(jjj,iii,:),NR_temp,1);
-                   R0=R0+y*y';
-                end
-                R=R+R0./Ns;
+            y=reshape(Rx_sensing(:,:,:),NR_temp,M*Ns);
+            parfor iii=1:M_temp*Ns_temp
+               R=R+y(iii)*y(iii)';
             end
-            R=R./M;
+            R=R./(M*Ns);
             doa_time=doa_time+toc-temp;
         %% Parameter Estimation
             %L_estimate=4;
