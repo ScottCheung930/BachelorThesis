@@ -23,7 +23,7 @@ P_TauDoppler=P_TauDoppler(tau1:tau2,dopp1:dopp2);
 P_TauDoppler=conj(P_TauDoppler).*P_TauDoppler;
 P_TauDoppler = 10*log10(P_TauDoppler/N0);
 fprintf("peak SNR=%.2f\n",max(max(P_TauDoppler)));
- if(max(max(P_TauDoppler))<50)
+ if(max(max(P_TauDoppler))<70)
      ifExist=0;
  else
      ifExist=1;

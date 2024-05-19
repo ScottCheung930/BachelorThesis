@@ -3,10 +3,10 @@ function [range_value,velocity_value, pks,peaks_num,meanHeight]=Find_2DFFT_Peaks
     [max_P,V_Ind]=max(matrix.');
 
     %max_P=conv(max_P,[0.33,0.33,0.33]);
-    [pks,maxTau]=findpeaks(max_P,'MinPeakProminence',7,'MinPeakDistance',2,'MinPeakHeight',max(max_P)-100);
+    [pks,maxTau]=findpeaks(max_P,'MinPeakProminence',5,'MinPeakDistance',2,'MinPeakHeight',max(max_P)-100);
     meanHeight=mean(pks);
     if(length(pks)>=3)
-        [pks,index]=findpeaks(pks,'MinPeakProminence',7,'MinPeakHeight',50);
+        [pks,index]=findpeaks(pks,'MinPeakProminence',5,'MinPeakHeight',70);
         maxTau=maxTau(index);
     end
     
