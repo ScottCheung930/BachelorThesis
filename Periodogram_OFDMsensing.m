@@ -21,9 +21,9 @@ dopp1=1;
 dopp2=round(60*(2*fc*Ts*Mp)/c0);
 P_TauDoppler=P_TauDoppler(tau1:tau2,dopp1:dopp2);
 P_TauDoppler=conj(P_TauDoppler).*P_TauDoppler;
-P_TauDoppler = 10*log10(P_TauDoppler/N0);
+
 fprintf("peak SNR=%.2f\n",max(max(P_TauDoppler)));
- if(max(max(P_TauDoppler))<70)
+ if(max(max(P_TauDoppler))<50)
      ifExist=0;
  else
      ifExist=1;
@@ -35,6 +35,7 @@ velocity=velocity.*delta_v;
 %range=1:Kp;
 range=tau1:tau2;
 range=range.*delta_r;
-%range=kron(ones(1,Mp),range.');
-
+range=kron(ones(1,Mp),range.');
+P_TauDoppler=P_TauDoppler.*(range.^4)/6250000;%排除路径损耗的影响
+P_TauDoppler = 10*log10(P_TauDoppler/N0);
 end

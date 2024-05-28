@@ -12,6 +12,7 @@ if(ifPlotMusicSpectrum==1)
     delete(fullfile('./fig/','*_MUSIC.png'));
 end
 delete(fullfile('./fig/','*_Performance.png'));
+delete(fullfile('./data/','*.txt'));
 global c0 fc lambda M N Ns Ndir delta_f Ts  NR NT Fp Delta_theta figureNumber; % 定义全局变量 %CPsize
 figureNumber=1;
 tic;
@@ -39,14 +40,14 @@ tic;
     Ts = T + Tcp;  % 总符号时延=符号持续时间+循环前缀
     %CPsize = M / 16; % 循环前缀码的长度，子载波数量的1/16
 
-    Fp=5;
+    Fp=10;
     bitsPerSymbol = 4; % 每符号比特数
     qam = 2^(bitsPerSymbol); % QAM调制，每正交方向bitsPerSymbo个幅度取值
 
 
 %% 蒙特卡洛实验
 %SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0SNR = 0; %信噪比(dB)=平均符号功率/单边白噪声功率N0
-Num_SNR=6;
+Num_SNR=7;
 Index_SNR=1;
 Total_MC_time=10;
 Total_Ndir=Num_SNR*Ndir*Total_MC_time;
@@ -71,7 +72,7 @@ r_v_time=0;
  %开始循环
  for MC_time=0:(Total_MC_time-1)
     Index_SNR=1;
-    for SNR=-5:5:20
+    for SNR=-10:5:20
         temp=toc;
         %% Targets Information
         % r = [80,20, 30, 37, 25];  %Range
@@ -108,16 +109,17 @@ r_v_time=0;
         h_doppler=exp(1j*2*pi*Ts.*kron((0:(Ns-1)).',doppler));
         h_delay=exp(-1j*2*pi*delta_f.*kron((0:(M-1)).',delay));
         L=length(theta);
-        Ar=steeringGen(theta,NR);%steering matrix
-        At=steeringGen(theta,NT);
+        Ar=steeringGen((-1).*theta,NR);%steering matrix
+        At=steeringGen((-1).*theta,NT);
         P_symbol=0; %平均每符号功率
         N0=10^(-SNR/10);%N0：单边噪声功率
 
         angle_sense=-60;%波束朝向角度初始为-60，每次扫描Delta_theta角度范围，直至完成[-60,60]的扫描
         angle_comm=theta(end);%令最后一个位置为通信用户
-        [Pattern_comm, ~]=plotAF(angle_comm,0,0);
+        %[Pattern_comm, ~]=plotAF(angle_comm,0,0);
+        [Pattern_comm, ~]=plotAF(0,0,0);
         pos=0:(NT-1);
-        beamforming_comm=exp(-1j*pi*sind(angle_comm).*(pos.'));
+        beamforming_comm=exp(1j*pi*sind(angle_comm).*(pos.'));
         %% Generate Transmission data
         data = randi([0 qam-1], M, N); % M行N列整数矩阵，使用M个子载波的N个OFDM符号
                                                             % randi([0 qam-1], ___) 包含从区间 [0,qam-1] 的均匀离散分布中得到的整数
@@ -132,8 +134,8 @@ r_v_time=0;
         Rx_sensing=zeros(M,Ns,NR);% Rx_sensing(m,n,:)表示第n个OFDM符号中的第m个子载波的阵列接收矢量，
         RxData_sensing=zeros(M,Ns); %接收符号
 
-        Z=zeros(1,5);
-       prepare_time=prepare_time+toc-temp;
+        Z=zeros(1,6);
+        prepare_time=prepare_time+toc-temp;
         %% Start receiving
         flag=0;
         %扫描Ndir个方向
@@ -149,21 +151,24 @@ r_v_time=0;
                 end
 
                %当接收到Ns个OFDM符号时，进行一次DoA估计
-               angle_start = angle_sense-0.65*Delta_theta;%搜索区间
-               angle_end  = angle_sense+0.65*Delta_theta;
+               angle_start = angle_sense-0.5*Delta_theta;%搜索区间
+               angle_end  = angle_sense+0.5*Delta_theta;
                str=["["+num2str(angle_start)+"°,"+num2str(angle_end)+"°]"];
                fprintf("Within "); fprintf(str); fprintf('\n');
 
 
                %更新阵列因子
-               [Pattern_sense, ~]=plotAF(angle_sense,0,0);
-               Pattern=(Pattern_sense+Pattern_comm)./2;
+               %[Pattern_sense, ~]=plotAF(angle_sense,0,0);
+               %Pattern=(Pattern_sense+Pattern_comm)./2;
+               Pattern=Pattern_comm;
                %更新波束成形矢量
                pos=0:(NT-1);
-               beamforming_sense=exp(-1j*pi*sind(angle_sense).*(pos.'));
+               beamforming_sense=exp(1j*pi*sind(angle_sense).*(pos.'));
                beamforming=0.5*sqrt(2)*beamforming_sense+0.5*sqrt(2)*beamforming_comm;
                %更新阵列因子
-               h_pattern = Pattern(round((theta+180)*10+1));
+               %h_pattern = Pattern(round((theta+180)*10+1));
+               h_pattern = 0.5*(Pattern(round((theta-angle_sense+180)*10+1))+Pattern(round((theta-angle_comm+180)*10+1)));
+
 
                Ns_temp=Ns;
                NR_temp=NR;
@@ -266,7 +271,7 @@ r_v_time=0;
                 end
 
                 %保存当前方向r-v估计结果
-                r_v_result=vertcat(range_value,velocity_value,pks,10*round(pks./meanHeight));
+                r_v_result=vertcat(range_value,velocity_value,pks,round(0.5*pks./meanHeight));%2个目标时取0.2，10个目标时取10
                 r_v_result=r_v_result.';
 
                 r_v_time=r_v_time+toc-temp;
@@ -290,23 +295,29 @@ r_v_time=0;
         %% 去除冗余目标点
         temp=toc;
         %Zsort=sortrows(Z,[1,2,-3,-4]);%先按第1列距离r和第二列v升序，然后按相对峰值(第4列)和绝对峰值(第3列)降序排列
-        Zsort=sortrows(Z,[-3,-4]);
+        delta_v=3*delta_v;
+        Zsort=sortrows(Z,[1,2]);
+        [Num0,~]=size(Zsort);
+        freq=ones(Num0,1);
+        j=1;
+        count=1;
+        for i=2:Num0
+             if ((Zsort(j,1)-delta_r<Zsort(i,1))&&(Zsort(j,1)+delta_r>Zsort(i,1))&&...
+                (Zsort(j,2)-delta_v<Zsort(i,2))&&(Zsort(j,2)+delta_v>Zsort(i,2)))
+                count=count+1;
+             else
+                 freq(j:(j+count-1),1)=freq(j:(j+count-1),1)*count;
+                 count=1;
+                 j=i;
+             end
+        end
+        freq(j:(j+count-1),1)=freq(j:(j+count-1),1)*count;
+        Zsort=horzcat(Zsort,freq);
+        Zsort=sortrows(Zsort,[7,1,2,-4,-3]);
+        %Zsort=sortrows(Z,-3);
         Zprun=Zsort(1,:);
         Target_Num=1;
-        [Num0,~]=size(Zsort);
-        delta_v=3*delta_v;
-%         for i=2:Num0%遍历所有行
-%             if ((Zprun(Target_Num,1)-delta_r<Zsort(i,1))&&(Zprun(Target_Num,1)+delta_r>Zsort(i,1))&&...
-%                 (Zprun(Target_Num,2)-delta_v<Zsort(i,2))&&(Zprun(Target_Num,2)+delta_v>Zsort(i,2)) )
-%                 if((Zprun(Target_Num,3)-3<Zsort(i,3))&&(Zprun(Target_Num,3)+3>Zsort(i,3))...
-%                         &&(Zsort(i,4)>Zprun(Target_Num,4)))
-%                     Zprun(Target_Num,:)=Zsort(i,:);
-%                 end
-%             else
-%                 Target_Num=Target_Num+1;
-%                 Zprun=[Zprun;Zsort(i,:)];
-%             end
-%         end
+
         for i=2:Num0%遍历所有行
             count=0;
             for j=1:Target_Num
@@ -326,28 +337,57 @@ r_v_time=0;
 
         %% 
         figure(figureNumber);
-        set(gcf,'Position',[488.2,205,801.6,389.6])
+        set(gcf,'Position',[311.4,181.8,1124.8,443.2])
+        set(gcf,'InnerPosition',[311.4,181.8,1124.8,443.2]);
+        set(gcf,'OuterPosition',[304.2,174.6,1139.2,532]);
         subplot(1,2,1)
-        polarplot(deg2rad(Z(:,5)),Z(:,1),'*');
+        polarplot(deg2rad(theta(1:(end-1))),r(1:(end-1)),'or');
         hold on
-        polarplot(deg2rad(theta),r,'o');
-        %legend("Estimated Targets","True Targets");
+        polarplot(deg2rad(theta(end)),r(end),'sg');
+        hold on
+        polarplot(deg2rad(Zsort(:,5)),Zsort(:,1),'*b');
         hold off
         thetalim([-60,60]);
-
         title("Before Pruning");
+        
         subplot(1,2,2)
-        polarplot(deg2rad(Zprun(:,5)),Zprun(:,1),'*');
+        polarplot(deg2rad(theta(1:(end-1))),r(1:(end-1)),'or');
         hold on
-        polarplot(deg2rad(theta),r,'o');
+        polarplot(deg2rad(theta(end)),r(end),'sg');
+        hold on
+        polarplot(deg2rad(Zprun(:,5)),Zprun(:,1),'*b');
         hold off
-        legend("Estimated Targets","True Targets");
+        legend("non-UE Targets","UE Target","Estimated Targets");
         thetalim([-60,60]);
-
         title("After Pruning");
+        
         str=['./fig/Figure ',num2str(figureNumber),'_MC',num2str(MC_time),'_SNR',num2str(SNR),'dB_Performance.png'];
         figureNumber=figureNumber+1;
         saveas(gcf, str);
+        close(gcf);
+        
+        % 保存工作区变量到文件
+        str=['./data/Data ',num2str(figureNumber),'_MC',num2str(MC_time),'_SNR',num2str(SNR),'dB_Zsort.txt'];  
+        fid = fopen(str, 'wt'); 
+        [size1, size2] = size(Zsort);   
+        for iii = 1 : size1  
+            for jjj = 1 : size2 
+                    fprintf(fid, '%4f\t', Zsort(iii,jjj));
+            end
+            fprintf(fid, '%4f\n', Zsort(iii,jjj));
+        end   
+        fclose(fid);   
+        
+        str=['./data/Data ',num2str(figureNumber),'_MC',num2str(MC_time),'_SNR',num2str(SNR),'dB_Zprun.txt'];  
+        fid = fopen(str, 'wt'); 
+        [size1, size2] = size(Zprun);   
+        for iii = 1 : size1  
+            for jjj = 1 : size2 
+                    fprintf(fid, '%4f\t', Zprun(iii,jjj));
+            end
+            fprintf(fid, '%4f\n', Zprun(iii,jjj));
+        end   
+        fclose(fid);   
         
         %% 计算误差
         Position=[r;v;theta];
@@ -357,7 +397,6 @@ r_v_time=0;
         e_range=zeros(Target_Num,length(theta));
         e_velocity=zeros(Target_Num,length(theta));
         e_pos=zeros(Target_Num,length(theta));
-        RMSE_pos=zeros(1,6);
         for ii=1:Target_Num
             for jj=1:length(theta)
                  e_pos(ii,jj)=(Position(jj,1)*cosd(Position(jj,3))-Zprun(ii,1)*cosd(Zprun(ii,5)))^2+(Position(jj,1)*sind(Position(jj,3))-Zprun(ii,1)*sind(Zprun(ii,5)))^2;
@@ -377,15 +416,18 @@ r_v_time=0;
             RMSE_range(Index_SNR)=RMSE_range(Index_SNR)+e_range(row,col);  %距离估计
             RMSE_velocity(Index_SNR)=RMSE_velocity(Index_SNR)+e_velocity(row,col);%速度估计
 
-            e_pos(row,:)=[];
-            e_pos(:,col)=[];
+            e_pos(row,:)=[]; e_pos(:,col)=[];
+            e_DoA(row,:)=[]; e_DoA(:,col)=[];
+            e_range(row,:)=[]; e_range(:,col)=[];
+            e_velocity(row,:)=[]; e_velocity(:,col)=[];
             success_detected= success_detected+1;
         end
             
         Pr_detect(Index_SNR)=Pr_detect(Index_SNR)+success_detected;
         Index_SNR=Index_SNR+1;
-    end
- end
+    end%遍历不同SNR值
+    
+ end%MC循环
  %%
 RMSE_pos=sqrt(RMSE_pos./Pr_detect);%位置RMSE
 RMSE_DoA=sqrt(RMSE_DoA./Pr_detect);%DoA估计
@@ -400,23 +442,26 @@ fprintf("总耗时：%.2f s\n",total_time);
 fprintf("准备时间占%.2f %%\t 发送接收耗时占 %.2f%%\t DoA估计耗时占%.2f%%\t 距离速度估计耗时占%2f%%\t"...
        ,100*prepare_time/total_time, 100*receiving_time/total_time, 100*doa_time/total_time,100*r_v_time/total_time);
 %% 画图分析
-SNR=-5:5:20;
+SNR=-10:5:20;
 figure(figureNumber);
 subplot(1,3,1);
 plot(SNR,RMSE_range,'-*');
 title("(a)")
 xlabel("SNR / dB");
 ylabel("距离估计RMSE/m");
+ylim([0 25]);
 subplot(1,3,2);
 plot(SNR,RMSE_velocity,'-*');
 title("(b)")
 xlabel("SNR / dB");
 ylabel("速度估计RMSE/m·s^-^1");
+ylim([0 25]);
 subplot(1,3,3);
 plot(SNR,RMSE_DoA,'-*');
 title("(c)")
 xlabel("SNR / dB");
 ylabel("到达角估计RMSE/ °");
+%ylim([0 25]);
 str=['./fig/Figure ',num2str(figureNumber),'_参数估计RMSE.png'];
 figureNumber=figureNumber+1;
 saveas(gcf, str);
